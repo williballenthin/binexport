@@ -1,0 +1,44 @@
+@font-face {
+  font-family: 'IntelOneMono';
+  src: url('./font/intelone/intelone-mono-font-family-regular.woff2') format('woff2');
+}
+
+.flow-graph {
+  font-family: IntelOneMono;
+}
+
+.instruction {
+  display: inline-block;
+
+  width: 100%;
+}
+
+.instruction .address {
+  display: inline-block;
+
+  width: 8em;
+}
+
+.instruction .mnemonic {
+  display: inline-block;
+
+  width: 6em;
+}
+
+.instruction .operands {
+  display: inline-block;
+
+  width: 24em;
+}
+
+.expression {
+  color: grey;
+}
+
+.expression.register {
+  color: blue;
+}
+
+.expression.immediate-int {
+  color: green;
+}
