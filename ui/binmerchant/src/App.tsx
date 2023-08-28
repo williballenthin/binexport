@@ -1,7 +1,8 @@
 import './App.css';
-import { Fragment, Suspense } from 'react';
+import { Fragment } from 'react';
+import { string, custom } from '@recoiljs/refine';
 import {
-  RecoilRoot,
+  DefaultValue,
   atom,
   selector,
   useRecoilState,
@@ -9,8 +10,174 @@ import {
 } from 'recoil';
 import { BinExport2 } from './BinExport2';
 import Long from 'long';
+import { urlSyncEffect } from 'recoil-sync';
+
+const sha256State = atom({
+  key: "sha256State",
+  default: "0501d09a219131657c54dba71faf2b9d793e466f2c7fdf6b0b3c50ec5b866b2a",
+  effects: [
+    urlSyncEffect({ 
+      history: "push",
+      syncDefault: true,
+      itemKey: "sha256",
+      refine: string() 
+    }),
+  ]
+});
+
+const binExportValue = selector({
+  key: 'binExportValue',
+  get: async ({get}) => {
+    const sha256 = get(sha256State);
+    const raw_be = await (await fetch(`/data/${sha256}.BinExport`)).arrayBuffer();
+
+    return BinExport2.decode(new Uint8Array(raw_be));
+  },
+});
+
+function getFlowGraphAddress(be: BinExport2, fgIndex: number): Long | null {
+  const fg = be.flowGraph[fgIndex];
+
+  const bbIndex = fg.entryBasicBlockIndex;
+  if (bbIndex == null) {
+    return null;
+  }
+  const bb = be.basicBlock[bbIndex];
+  if (bb.instructionIndex == null) {
+    return null;
+  }
+  const ii = bb.instructionIndex[0];
+  if (ii.beginIndex == null) {
+    return null;
+  }
+  const insnIndex = ii.beginIndex;
+
+  const insn = be.instruction[insnIndex];
+
+  const insnAddress = getInstructionAddress(insn);
+  if (insnAddress == null) {
+    // this might be the case if the prior instruction has an address and size.
+    return null;
+  }
+
+  return insnAddress
+}
+
+const defaultAddressValue = selector({
+  key: 'defaultAddressValue',
+  get: ({get}) => {
+    const be = get(binExportValue);
+    const address = getFlowGraphAddress(be, 0);
+    if (address == null) {
+      throw new Error("first function has no address");
+    }
+    return address;
+  },
+});
+
+const currentAddressState = atom({
+  key: "addressState",
+  default: defaultAddressValue,
+  effects: [
+    urlSyncEffect({ 
+      history: "push",
+      syncDefault: true,
+      itemKey: "address",
+      refine: custom(x => Long.isLong(x) ? x : null),
+      read: ({read}) => {
+        const v = read("address");
+
+        if (v instanceof DefaultValue) {
+          return Long.fromNumber(0);
+        }
+
+        return Long.fromString(read("address") as any, true, 0x10);
+      },
+      write: ({write, read}, newValue) => {
+        write("address", newValue.toString(0x10))
+      },
+    })
+  ]
+});
+
+const binExportIndexValue = selector({
+  key: "binExportIndexValue",
+  get: ({get}) => {
+    const be: BinExport2 = get(binExportValue)
+
+    // from address (as hex) to insn index
+    const insnByAddress: Record<string, number> = {};
+    for (const [index, insn] of be.instruction.entries()) {
+      const iaddr = getInstructionAddress(insn);
+      if (iaddr == null) {
+        continue;
+      }
+
+      insnByAddress[iaddr.toString(16)] = index;
+    }
+
+    // from insn index to bb index
+    const bbByInsn: Record<number, number> = {};
+    for (const [index, bb] of be.basicBlock.entries()) {
+      if (bb.instructionIndex == null) {
+        continue;
+      }
+
+      const ii = bb.instructionIndex[0];
+      if (ii.beginIndex == null) {
+        continue
+      }
+
+      bbByInsn[ii.beginIndex] = index;
+    }
+
+    const fgByBb: Record<number, number> = {};
+    for (const [index, fg] of be.flowGraph.entries()) {
+      if (fg.entryBasicBlockIndex == null) {
+        continue
+      }
+
+      fgByBb[fg.entryBasicBlockIndex] = index;
+    }
+
+    function getFlowGraphByAddress(address: Long): number | null {
+      const insnIndex = insnByAddress[address.toString(16)];
+      if (insnIndex == null) {
+        return null;
+      }
+
+      const bbIndex = bbByInsn[insnIndex];
+      if (bbIndex == null) {
+        return null;
+      }
+
+      const fgIndex = fgByBb[bbIndex];
+      if (fgIndex == null) {
+        return null;
+      }
+
+      return fgIndex;
+    }
+
+    return {
+      getFlowGraphByAddress
+    }
+  }
+})
+
+const currentFlowGraphIndexValue = selector({
+  key: 'currentFlowGraphIndexValue',
+  get: ({get}) => {
+    const currentAddress = get(currentAddressState);
+    const beIndex = get(binExportIndexValue);
+
+    return beIndex.getFlowGraphByAddress(currentAddress)
+  },
+});
 
 function Meta({meta}: {meta: BinExport2.IMeta | null | undefined}) {
+  const [currentAddress, setCurrentAddress] = useRecoilState(currentAddressState);
+
   if (meta) {
     return (
       <div>
@@ -23,6 +190,9 @@ function Meta({meta}: {meta: BinExport2.IMeta | null | undefined}) {
 
           <dt>executeable name</dt>
           <dd>{meta.executableName}</dd>
+
+          <dt>address</dt>
+          <dd>{currentAddress.toString(0x10).toUpperCase()}</dd>
         </dl>
       </div>
     )
@@ -31,6 +201,33 @@ function Meta({meta}: {meta: BinExport2.IMeta | null | undefined}) {
       <dl></dl>
     )
   }
+}
+
+function FunctionList() {
+  const be = useRecoilValue(binExportValue);
+  const [currentAddress, setCurrentAddress] = useRecoilState(currentAddressState);
+
+  const addresses = [];
+  for (const fgIndex of be.flowGraph.keys()) {
+    const fgAddress = getFlowGraphAddress(be, fgIndex);
+    if (fgAddress == null) {
+      continue;
+    }
+
+    addresses.push(fgAddress);
+  }
+
+  return (
+    <ul>
+      {addresses.map((address) => (
+        <li key={address.toString(0x10)} style={{fontWeight: address.eq(currentAddress) ? "bold" : "normal"}}>
+          <a onClick={() => setCurrentAddress(address)}>
+            {address.toString(0x10).toUpperCase()}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function Expression({be, index, expr, childrenByIndex}: {be: BinExport2, index: number, expr: BinExport2.IExpression, childrenByIndex: Record<number, Array<number>>}) {
@@ -106,11 +303,25 @@ function Operand({be, op}: {be: BinExport2, op: BinExport2.IOperand}) {
 }
 
 function Instruction({be, address, insn}: {be: BinExport2, address: Long, insn: BinExport2.IInstruction}) {
+  const beIndex = useRecoilValue(binExportIndexValue);
+  const [currentAddress, setCurrentAddress] = useRecoilState(currentAddressState);
+
   if (insn.mnemonicIndex == null) {
     return (<div>error: instruction has no mnemonic</div>);
   }
 
   const mnem = be.mnemonic[insn.mnemonicIndex];
+
+  const targets: Array<Long> = [];
+  if (insn.callTarget != null) {
+    for (const callTarget of insn.callTarget) {
+      const callTargetAddress = beIndex.getFlowGraphByAddress(ensureLong(callTarget))
+      if (callTargetAddress == null) {
+        continue;
+      }
+      targets.push(ensureLong(callTarget));
+    }
+  }
 
   return (
     <span className="instruction">
@@ -131,7 +342,16 @@ function Instruction({be, address, insn}: {be: BinExport2, address: Long, insn: 
         ))}
       </span>
 
-      <span className="comment"></span>
+      <span className="comment">
+        {targets.map((target) => (
+          <Fragment key={target.toString(0x10)}>
+            <a onClick={() => setCurrentAddress(target)}>
+              →{target.toString(0x10).toUpperCase()}
+            </a>
+            {" "}
+          </Fragment>
+        ))}
+      </span>
     </span>
   )
 }
@@ -153,6 +373,16 @@ function* getBasicBlockInstructionIndices(bb: BinExport2.IBasicBlock) {
   }
 
   return;
+}
+
+function ensureLong(v: number | Long): Long  {
+  if (Long.isLong(v)) {
+    return v;
+  } else if (Number.isInteger(v)) {
+    return Long.fromString(v.toString(0x10), true, 0x10);
+  } else {
+    throw new Error("unexpected type");
+  }
 }
 
 function getInstructionAddress(insn: BinExport2.IInstruction): Long | null {
@@ -214,83 +444,14 @@ function FlowGraph({be, fg}: {be: BinExport2, fg: BinExport2.IFlowGraph}) {
   )
 }
 
-const sha256State = atom({
-  key: "sha256State",
-  default: "0501d09a219131657c54dba71faf2b9d793e466f2c7fdf6b0b3c50ec5b866b2a",
-});
 
-const binExportValue = selector({
-  key: 'binExportState',
-  get: async ({get}) => {
-    const sha256 = get(sha256State);
-    const raw_be = await (await fetch(`/data/${sha256}.BinExport`)).arrayBuffer();
+function App() {
+  const [sha256, setSha256] = useRecoilState(sha256State);
+  const be: BinExport2 = useRecoilValue(binExportValue)
+  const [currentAddress, setCurrentAddress] = useRecoilState(currentAddressState);
+  const currentFlowGraphIndex = useRecoilValue(currentFlowGraphIndexValue);
 
-    return BinExport2.decode(new Uint8Array(raw_be));
-  },
-});
-
-function App({be}: {be: BinExport2}) {
-  //const be: BinExport2 = useRecoilValue(binExportValue)
-
-  // from address (as hex) to insn index
-  const insnByAddress: Record<string, number> = {};
-  for (const [index, insn] of be.instruction.entries()) {
-    const iaddr = getInstructionAddress(insn);
-    if (iaddr == null) {
-      continue;
-    }
-
-    insnByAddress[iaddr.toString(16)] = index;
-  }
-
-  // from insn index to bb index
-  const bbByInsn: Record<number, number> = {};
-  for (const [index, bb] of be.basicBlock.entries()) {
-    if (bb.instructionIndex == null) {
-      continue;
-    }
-
-    const ii = bb.instructionIndex[0];
-    if (ii.beginIndex == null) {
-      continue
-    }
-
-    bbByInsn[ii.beginIndex] = index;
-  }
-
-  const fgByBb: Record<number, number> = {};
-  for (const [index, fg] of be.flowGraph.entries()) {
-    if (fg.entryBasicBlockIndex == null) {
-      continue
-    }
-
-    fgByBb[fg.entryBasicBlockIndex] = index;
-  }
-
-  function getFlowGraphByAddress(address: Long): number | null {
-    const insnIndex = insnByAddress[address.toString(16)];
-    if (insnIndex == null) {
-      return null;
-    }
-
-    const bbIndex = bbByInsn[insnIndex];
-    if (bbIndex == null) {
-      return null;
-    }
-
-    const fgIndex = fgByBb[bbIndex];
-    if (fgIndex == null) {
-      return null;
-    }
-
-    return fgIndex;
-  }
-
-  const entryIndex = getFlowGraphByAddress(Long.fromString("0x7ffb612c260C", true, 16));
-  if (entryIndex == null) {
-    throw new Error("entry is null");
-  }
-  console.log("entry", entryIndex);
+  document.title = `BinMerchant: ${sha256}: ${currentAddress}`;
 
   for (const section of be.section) {
     //console.log(section.address?.toString(0x10), section.size?.toString(0x10));
@@ -300,17 +461,16 @@ function App({be}: {be: BinExport2}) {
     //console.log(library.name, library.loadAddress?.toString(0x10));
   }
 
-  const entry = be.flowGraph[entryIndex];
-
   return (
-    <RecoilRoot>
-      <Suspense fallback={<div>Loading...</div>}>
-        <div className="App">
-          <Meta meta={be.metaInformation} />
-          <FlowGraph be={be} fg={entry} />
+    <div className="App">
+      <Meta meta={be.metaInformation} />
+      <div style={{position: "relative"}}>
+        {currentFlowGraphIndex == null ? "" : <FlowGraph be={be} fg={be.flowGraph[currentFlowGraphIndex]} />}
+        <div style={{position: "absolute", right: "0px", top:  "0px", height: "calc(100vh - 200px)", overflow: "scroll"}}>
+          <FunctionList />
         </div>
-      </Suspense>
-    </RecoilRoot>
+      </div>
+    </div>
   );
 }
 

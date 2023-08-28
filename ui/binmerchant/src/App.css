@@ -42,3 +42,8 @@
 .expression.immediate-int {
   color: green;
 }
+
+a:hover {
+  color: blue;
+  text-decoration: underline;
+}
