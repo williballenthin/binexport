@@ -7,6 +7,8 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 
 import App from './App';
+import Loading from "./Loading";
+
 
 
 async function main() {
@@ -18,7 +20,7 @@ async function main() {
     <React.StrictMode>
       <RecoilRoot>
         <RecoilURLSyncJSON location={{part: 'queryParams'}}>
-          <React.Suspense fallback={<div>Loading...</div>}>
+          <React.Suspense fallback={<Loading />}>
             <App />
           </React.Suspense>
         </RecoilURLSyncJSON>
