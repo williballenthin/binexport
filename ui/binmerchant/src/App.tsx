@@ -1,5 +1,5 @@
 import './App.css';
-import { Fragment } from 'react';
+import { Fragment, useCallback, useEffect } from 'react';
 import {
   useRecoilState,
   useRecoilValue,
@@ -8,7 +8,7 @@ import { FixedSizeList as List } from "react-window";
 import AutoSizer from "react-virtualized-auto-sizer";
 import { BinExport2 } from './BinExport2';
 import Long from 'long';
-import { model, getFlowGraphAddress, IFlowGraph, IBasicBlock, IInstruction, IOperand, IExpression } from './Model';
+import { model, IFlowGraph, IBasicBlock, IInstruction, IOperand, IExpression } from './Model';
 
 function addressId(address: Long): string {
   return `address-${address.toString(0x10).toUpperCase()}`;
@@ -200,13 +200,20 @@ function App() {
 
   document.title = `BinMerchant: ${sha256}: ${currentAddress}`;
 
-  for (const section of be.section) {
-    //console.log(section.address?.toString(0x10), section.size?.toString(0x10));
-  }
+  const handleEscPress = useCallback((event: any) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      window.history.back();
+    }
+  }, []);
 
-  for (const library of be.library) {
-    //console.log(library.name, library.loadAddress?.toString(0x10));
-  }
+  useEffect(() => {
+    document.addEventListener('keyup', handleEscPress);
+
+    return () => {
+      document.removeEventListener('keyup', handleEscPress);
+    };
+  }, [handleEscPress]);
 
   return (
     <div className="App">
