@@ -112,11 +112,25 @@ const defaultAddressValue = selector({
   key: 'defaultAddressValue',
   get: ({get}) => {
     const be = get(binExportValue);
-    const address = getFlowGraphAddress(be, 0);
-    if (address == null) {
-      throw new Error("first function has no address");
+
+    const url = new URL(window.location.href);
+    try {
+      // why do we have to manually pull this from the URL?
+      // i guess recoil-sync doesn't do the initial sync from URL to state.
+      // or, i'm using it wrong.
+      const v = url.searchParams.get("address");
+      if (v == null) {
+        throw new Error("no address param")
+      }
+      // annoying to have to duplicate the recoil-sync parsing logic here.
+      return Long.fromString(JSON.parse(v), true, 0x10);
+    } catch (e) {
+      const address = getFlowGraphAddress(be, 0);
+      if (address == null) {
+        throw new Error("first function has no address");
+      }
+      return address;
     }
-    return address;
   },
 });
 
@@ -126,19 +140,19 @@ const currentAddressState = atom({
   effects: [
     urlSyncEffect({ 
       history: "push",
-      syncDefault: true,
+      syncDefault: false,
       itemKey: "address",
       refine: custom(x => Long.isLong(x) ? x : null),
       read: ({read}) => {
         const v = read("address");
 
         if (v instanceof DefaultValue) {
-          return Long.fromNumber(0);
+          return v;
         }
 
-        return Long.fromString(read("address") as any, true, 0x10);
+        return Long.fromString(v as any, true, 0x10);
       },
-      write: ({write, read}, newValue) => {
+      write: ({write}, newValue) => {
         write("address", newValue.toString(0x10))
       },
     })
