@@ -4,6 +4,8 @@ import {
   useRecoilState,
   useRecoilValue,
 } from 'recoil';
+import { FixedSizeList as List } from "react-window";
+import AutoSizer from "react-virtualized-auto-sizer";
 import { BinExport2 } from './BinExport2';
 import Long from 'long';
 import { model, getFlowGraphAddress, IFlowGraph, IBasicBlock, IInstruction, IOperand, IExpression } from './Model';
@@ -24,7 +26,7 @@ function Meta({meta}: {meta: BinExport2.IMeta | null | undefined}) {
   const currentAddress = useRecoilValue(model.currentAddress);
 
   if (meta == null) {
-    return (<div>
+    return (<div style={{borderBottom: "1px solid #CCCCCC"}}>
       <dl>
         <dt>meta</dt>
         <dd>(none)</dd>
@@ -33,7 +35,7 @@ function Meta({meta}: {meta: BinExport2.IMeta | null | undefined}) {
   }
 
   return (
-    <div>
+    <div style={{borderBottom: "1px solid #CCCCCC"}}>
       <dl>
         <dt>arch</dt>
         <dd>{meta.architectureName}</dd>
@@ -52,29 +54,34 @@ function Meta({meta}: {meta: BinExport2.IMeta | null | undefined}) {
 }
 
 function FunctionList() {
-  const be = useRecoilValue(model.be);
   const [currentAddress, setCurrentAddress] = useRecoilState(model.currentAddress);
+  const addresses = useRecoilValue(model.functionList);
 
-  const addresses = [];
-  for (const fgIndex of be.flowGraph.keys()) {
-    const fgAddress = getFlowGraphAddress(be, fgIndex);
-    if (fgAddress == null) {
-      continue;
-    }
+  const Row = ({ index, style }: {index: number, style: any}) => {
+    const address = addresses[index];
+    const isCurrentAddress = address.eq(currentAddress);
 
-    addresses.push(fgAddress);
-  }
+    return (<div style={{fontWeight: isCurrentAddress ? "bold" : "normal", ...style}}>
+      <a onClick={() => setCurrentAddress(address)}>
+        <Address address={address} />
+      </a>
+    </div>)
+  };
 
   return (
-    <ul>
-      {addresses.map((address) => (
-        <li key={addressKey(address)} style={{fontWeight: address.eq(currentAddress) ? "bold" : "normal"}}>
-          <a onClick={() => setCurrentAddress(address)}>
-            <Address address={address} />
-          </a>
-        </li>
-      ))}
-    </ul>
+    <AutoSizer>
+      {({ height, width }: {height: number, width: number}) => (
+          <List
+            className="function-list"
+            height={height}
+            width={width}
+            itemCount={addresses.length}
+            itemSize={16}
+          >
+            {Row}
+          </List>
+      )}
+    </AutoSizer>
   );
 }
 
@@ -206,7 +213,18 @@ function App() {
       <Meta meta={be.metaInformation} />
       <div style={{position: "relative"}}>
         {currentFlowGraph == null ? "" : <FlowGraph fg={currentFlowGraph} />}
-        <div style={{position: "absolute", right: "0px", top:  "0px", height: "calc(100vh - 200px)", overflow: "scroll"}}>
+        <div style={{
+            position: "absolute",
+            right: "0px",
+            top:  "0px", 
+            // 113px: height of metadata. determined empirically, sorry.
+            height: "calc(100vh - 113px - 2px)", 
+            width: "9em", 
+            overflow: "scroll", 
+            fontFamily: "IntelOneMono",
+            borderLeft: "1px solid #CCCCCC",
+            paddingLeft: "1em",
+          }}>
           <FunctionList />
         </div>
       </div>

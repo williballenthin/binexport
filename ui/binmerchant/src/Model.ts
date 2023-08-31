@@ -210,13 +210,22 @@ const binExportIndexValue = selector({
   }
 })
 
-const currentFlowGraphIndexValue = selector({
-  key: 'currentFlowGraphIndexValue',
+const functionListValue = selector({
+  key: 'functionListValue',
   get: ({get}) => {
-    const currentAddress = get(currentAddressState);
-    const beIndex = get(binExportIndexValue);
+    const be = get(binExportValue);
 
-    return beIndex.getFlowGraphByAddress(currentAddress);
+    const addresses: Long[] = [];
+    for (const fgIndex of be.flowGraph.keys()) {
+      const fgAddress = getFlowGraphAddress(be, fgIndex);
+      if (fgAddress == null) {
+        continue;
+      }
+
+      addresses.push(fgAddress);
+    }
+    
+    return addresses;
   },
 });
 
@@ -434,8 +443,7 @@ const currentFlowGraphValue: RecoilValueReadOnly<IFlowGraph | null> = selector({
 export const model = {
     sha256: sha256State,
     be: binExportValue,
-    index: binExportIndexValue,
+    functionList: functionListValue,
     currentAddress: currentAddressState,
-    currentFlowGraphIndex: currentFlowGraphIndexValue,
     currentFlowGraph: currentFlowGraphValue,
 }
