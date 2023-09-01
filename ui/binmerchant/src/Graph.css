@@ -1,0 +1,39 @@
+#scratch {
+    position: relative;
+    top: -10000000px;
+    left: -1000000px;
+}
+
+.edge {
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    overflow: visible;
+}
+
+.edge polyline {
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.edge marker {
+    fill: #888888;
+}
+
+.edge-condition-true polyline {
+    stroke: green;
+}
+
+.edge-condition-false polyline {
+    stroke: red;
+}
+
+.edge-unconditional polyline,
+.edge-switch polyline {
+    stroke: blue;
+}
+
+.basic-block {
+    background-color: white;
+}

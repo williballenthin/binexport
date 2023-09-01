@@ -1,7 +1,5 @@
 import React from 'react';
-import {
-  RecoilRoot,
-} from 'recoil'
+import { RecoilRoot } from 'recoil'
 import { RecoilURLSyncJSON } from 'recoil-sync';
 import ReactDOM from 'react-dom/client';
 import './index.css';

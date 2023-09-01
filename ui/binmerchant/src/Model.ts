@@ -272,10 +272,18 @@ export interface IBasicBlock {
   instructions: IInstruction[];
 }
 
+export interface IEdge {
+  sourceBasicBlockIndex: number;
+  targetBasicBlockIndex: number;
+  type: BinExport2.FlowGraph.Edge.Type;
+  isBackEdge: boolean;
+}
+
 export interface IFlowGraph {
   index: number;
   basicBlocks: IBasicBlock[];
   entryBasicBlockIndex: number;
+  edges: IEdge[];
 }
 
 const currentFlowGraphValue: RecoilValueReadOnly<IFlowGraph | null> = selector({
@@ -446,6 +454,30 @@ const currentFlowGraphValue: RecoilValueReadOnly<IFlowGraph | null> = selector({
             })
           }
         }),
+        edges: fg.edge.map((e) => {
+          if (e.type == null) {
+            throw new Error("missing type");
+          }
+
+          if (e.sourceBasicBlockIndex == null) {
+            throw new Error("missing source");
+          }
+
+          if (e.targetBasicBlockIndex == null) {
+            throw new Error("missing target");
+          }
+
+          if (e.isBackEdge == null) {
+            throw new Error("missing back edge");
+          }
+
+          return {
+            type: e.type,
+            sourceBasicBlockIndex: e.sourceBasicBlockIndex,
+            targetBasicBlockIndex: e.targetBasicBlockIndex,
+            isBackEdge: e.isBackEdge,
+          }
+        })
       }
     } catch (e) {
       console.error("error: ", e);

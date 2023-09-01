@@ -7,28 +7,33 @@
   font-family: IntelOneMono;
 }
 
-.instruction {
-  display: inline-block;
-
-  width: 100%;
+.basic-block {
+  float: left;
+  clear: left;
+  display: inline;
+  border: 1px solid #888888;
 }
 
-.instruction .address {
+.instruction {
   display: inline-block;
+}
 
-  width: 8em;
+.instruction .address,
+.instruction .bytes,
+.instruction .mnemonic,
+.instruction .operands,
+.instruction .comments {
+  display: inline-block;
+  margin-right: 1em;
+}
+
+.instruction .bytes {
+  width: 16em;
 }
 
 .instruction .mnemonic {
-  display: inline-block;
-
+  /* rep movsb */
   width: 6em;
-}
-
-.instruction .operands {
-  display: inline-block;
-
-  width: 24em;
 }
 
 .expression {
