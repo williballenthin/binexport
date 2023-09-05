@@ -27,7 +27,7 @@ function Meta({meta}: {meta: BinExport2.IMeta | null | undefined}) {
   }
 
   return (
-    <div style={{borderBottom: "1px solid #CCCCCC"}}>
+    <div className="meta" style={{borderBottom: "1px solid #CCCCCC"}}>
       <dl>
         <dt>arch</dt>
         <dd>{meta.architectureName}</dd>
@@ -116,6 +116,7 @@ function App() {
             fontFamily: "IntelOneMono",
             borderLeft: "1px solid #CCCCCC",
             paddingLeft: "1em",
+            backgroundColor: "white",
           }}>
           <FunctionList />
         </div>
